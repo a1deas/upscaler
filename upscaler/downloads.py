@@ -1,8 +1,13 @@
 # upscaler/upscaler/downloads.py
+from __future__ import annotations
+
 from pathlib import Path
 from typing import Optional
-
-import tempfile, zipfile, shutil, urllib.request
+import sys
+import shutil
+import tempfile
+import urllib.request
+import zipfile
 
 from rich.console import Console
 
@@ -10,16 +15,37 @@ from .config import MODELS_DIR, BINARIES_DIR, DEFAULT_REALESRGAN_BIN
 
 console = Console()
 
-BINARY_URL = (
-    "https://github.com/xinntao/Real-ESRGAN/releases/download/"
-    "v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip"
-)
+if sys.platform.startswith("win"):
+    PLATFORM = "windows"
+elif sys.platform == "darwin":
+    PLATFORM = "macos"
+else:
+    PLATFORM = "linux"
 
-def ensure_dirs() -> None: 
-    MODELS_DIR.mkdir(parents = True, exist_ok = True)
-    BINARIES_DIR.mkdir(parents = True, exist_ok = True)
+BINARY_URLS = {
+    "linux": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
+        "v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip"
+    ),
+    "windows": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
+        "v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip"
+    ),
+    "macos": (
+        "https://github.com/xinntao/Real-ESRGAN/releases/download/"
+        "v0.2.5.0/realesrgan-ncnn-vulkan-20220424-macos.zip"
+    ),
+}
 
-def _download_and_unpack_ncnn(url: str) -> None: 
+BINARY_URL = BINARY_URLS[PLATFORM]
+
+
+def ensure_dirs() -> None:
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    BINARIES_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _download_and_unpack_ncnn(url: str) -> None:
     ensure_dirs()
 
     with tempfile.TemporaryDirectory() as tmpdir_str:
@@ -33,12 +59,11 @@ def _download_and_unpack_ncnn(url: str) -> None:
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(tmpdir)
 
-        bin_src: Optional[Path] = None
+        bin_src: Path | None = None
         model_files: list[Path] = []
 
-        # Searching for *.bin/*.param
         for p in tmpdir.rglob("*"):
-            if p.is_file() and p.name == "realesrgan-ncnn-vulkan":
+            if p.is_file() and p.name.startswith("realesrgan-ncnn-vulkan"):
                 bin_src = p
             elif p.is_file() and p.suffix in (".bin", ".param"):
                 model_files.append(p)
@@ -49,38 +74,37 @@ def _download_and_unpack_ncnn(url: str) -> None:
         BINARIES_DIR.mkdir(parents=True, exist_ok=True)
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Binaries
         shutil.copy2(bin_src, DEFAULT_REALESRGAN_BIN)
         DEFAULT_REALESRGAN_BIN.chmod(0o755)
 
-        # Models
         for mf in model_files:
             dst = MODELS_DIR / mf.name
             shutil.copy2(mf, dst)
 
-
         console.print("[green]RealESRGAN NCNN downloaded and unpacked[/green]")
 
-def ensure_realesrgan_binary(auto_download: bool = False) -> Path: 
+
+def ensure_realesrgan_binary(auto_download: bool = False) -> Path:
     ensure_dirs()
     bin_path = DEFAULT_REALESRGAN_BIN
 
     if bin_path.exists():
         return bin_path
-    
+
     if not auto_download:
         console.print(
-            f"[yellow] Realesrgan-ncnn-vulkan not found: {bin_path}. "
-            "Copy it or --auto-download.[/yellow]"
+            f"[yellow]Realesrgan-ncnn-vulkan not found: {bin_path}. "
+            "Copy it manually or use --auto-download.[/yellow]"
         )
         return bin_path
-    
+
     _download_and_unpack_ncnn(BINARY_URL)
 
     if not bin_path.exists():
         raise RuntimeError("Download finished, but binary still not found.")
-    
+
     return bin_path
+
 
 def ensure_model(model_name: str, auto_download: bool = False) -> Optional[Path]:
     ensure_dirs()
