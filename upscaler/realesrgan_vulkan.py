@@ -23,17 +23,13 @@ def run_realesrgan(
     
     cmd = [
         str(bin_path),
-        "-i",
-        str(input_path),
-        "-o",
-        str(output_path),
-        "-s",
-        str(scale),
-        "-n",
-        model_name,
-        "-m",
-        str(model_dir),
-    ]
+        "-i", str(input_path),
+        "-o", str(output_path),
+        "-s", str(scale),
+        "-n", model_name,
+        "-m", str(model_dir), 
+]
+
 
     console.log(f"[blue] RealESRGAN: {' '.join(cmd)}[/blue]")
     proc = subprocess.run(cmd, capture_output = True, text = True)

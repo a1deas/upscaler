@@ -33,36 +33,33 @@ def _download_and_unpack_ncnn(url: str) -> None:
         with zipfile.ZipFile(zip_path, "r") as zf:
             zf.extractall(tmpdir)
 
-        # searching realesrgan-ncnn-vulkan-20220424-ubuntu
-        candidates = [p for p in tmpdir.iterdir() if p.is_dir()]
-        if not candidates:
-            raise RuntimeError("Archive does not contain expected folder")
-        root = candidates[0]
+        bin_src: Optional[Path] = None
+        model_files: list[Path] = []
 
-        bin_src = root / "realesrgan-ncnn-vulkan"
-        models_src = root / "models"
+        # Searching for *.bin/*.param
+        for p in tmpdir.rglob("*"):
+            if p.is_file() and p.name == "realesrgan-ncnn-vulkan":
+                bin_src = p
+            elif p.is_file() and p.suffix in (".bin", ".param"):
+                model_files.append(p)
 
-        if not bin_src.exists() or not models_src.exists():
-            raise RuntimeError("Archive missing binary or models folder")
+        if bin_src is None or not model_files:
+            raise RuntimeError("Archive missing binary or model files")
 
         BINARIES_DIR.mkdir(parents=True, exist_ok=True)
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
-        # copying binary
+        # Binaries
         shutil.copy2(bin_src, DEFAULT_REALESRGAN_BIN)
         DEFAULT_REALESRGAN_BIN.chmod(0o755)
 
-        # copying models dir
-        for item in models_src.iterdir():
-            dst = MODELS_DIR / item.name
-            if item.is_dir():
-                shutil.copytree(item, dst, dirs_exist_ok=True)
-            else:
-                shutil.copy2(item, dst)
+        # Models
+        for mf in model_files:
+            dst = MODELS_DIR / mf.name
+            shutil.copy2(mf, dst)
+
 
         console.print("[green]RealESRGAN NCNN downloaded and unpacked[/green]")
-
-
 
 def ensure_realesrgan_binary(auto_download: bool = False) -> Path: 
     ensure_dirs()
@@ -78,8 +75,6 @@ def ensure_realesrgan_binary(auto_download: bool = False) -> Path:
         )
         return bin_path
     
-    console.print("[cyan] Downloading realesrgan-ncnn-vulkan...[/cyan]")
-
     _download_and_unpack_ncnn(BINARY_URL)
 
     if not bin_path.exists():
