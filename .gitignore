@@ -1,0 +1,13 @@
+__pycache__/
+
+.venv/
+.poetry-cache/
+
+outputs/
+test_data/
+
+upscaler/models/
+upscaler/binaries/
+
+.env
+.vscode/
