@@ -16,6 +16,16 @@ else:
 
 DEFAULT_REALESRGAN_BIN = BINARIES_DIR / REALESRGAN_BINARY_NAME
 
+VALID_MODELS = {
+    2: ["realesrgan-x2plus"],
+    4: ["realesrgan-x4plus", "realesrgan-anime-x4"],
+}
+
+LT_MODEL = {
+    2: "realesrgan-x2plus",
+    4: "realesrgan-x4plus",
+}
+
 REALESRGAN_MODELS = {
     "general-x4": "realesrgan-x4plus",                  # x4
     "general-x2": "realesrgan-x2plus",                  # x2
