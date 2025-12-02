@@ -10,4 +10,5 @@ upscaler/models/
 upscaler/binaries/
 
 .env
+venv_upscaler/
 .vscode/
