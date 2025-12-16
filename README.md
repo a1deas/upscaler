@@ -16,3 +16,23 @@ This repository is part of a broader toolchain and is intended to be reused acro
 ## Status 
 This project is under active development. 
 Interfaces, backends and behavior may change. 
+
+## Backends
+- **Vulkan/NCNN (recommended default)**: `--backend realesrgan`
+  - Uses the external `realesrgan-ncnn-vulkan` binary (downloadable via `--auto-download`)
+  - Does **not** require PyTorch
+- **PyTorch (optional)**: `--backend torch`
+  - Requires installing extra dependencies (see below)
+
+## Installation (Poetry)
+Default install (Vulkan backend only):
+
+```text
+poetry install
+```
+
+Install with optional Torch backend dependencies:
+
+```text
+poetry install -E torch
+```

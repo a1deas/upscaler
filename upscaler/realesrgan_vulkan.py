@@ -20,6 +20,14 @@ def run_realesrgan(
 
     if not bin_path.exists() or model_dir is None: 
         raise RuntimeError("RealESRGAN binary or model missing")
+
+    # Support both single-file and folder modes.
+    # - If output_path looks like a file (has suffix), create parent folder.
+    # - Otherwise treat it as an output directory and create it.
+    if output_path.suffix:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+    else:
+        output_path.mkdir(parents=True, exist_ok=True)
     
     cmd = [
         str(bin_path),

@@ -7,7 +7,6 @@ import shutil, subprocess, tempfile
 
 from .ffmpeg_utils import upscale_image_bicubic, upscale_video_bicubic
 from .realesrgan_vulkan import run_realesrgan
-from .realesrgan_torch import run_realesrgan_torch
 
 console = Console()
 Backend = Literal["bicubic", "realesrgan", "torch"]
@@ -36,6 +35,14 @@ def upscale_image(
             auto_download = auto_download
         )
     elif backend == "torch":
+        # Lazy import: keep vulkan backend usable without torch installed.
+        try:
+            from .realesrgan_torch import run_realesrgan_torch
+        except Exception as e:
+            raise RuntimeError(
+                f"PyTorch backend requested but torch/torchvision is not available ({e}). "
+                f"Use --backend realesrgan for the Vulkan/NCNN backend."
+            ) from e
         run_realesrgan_torch(
             input_paths = [input_path],
             output_paths = [output_path],
@@ -90,26 +97,50 @@ def upscale_video(
 
         if backend == "torch":
             console.log(f"[bold green] Launching TORCH-backend (CUDA/FP16) [/bold green]")
-            run_realesrgan_torch(
-                input_paths=all_frames_in,
-                output_paths=all_frames_out,
-                scale=scale,
-                model_name=model,
-                device="cuda", 
-                fp16=torch_fp16,
-                batch_size=torch_batch_size,
-            )
+            # Lazy import: keep vulkan backend usable without torch installed.
+            try:
+                from .realesrgan_torch import run_realesrgan_torch
+                run_realesrgan_torch(
+                    input_paths=all_frames_in,
+                    output_paths=all_frames_out,
+                    scale=scale,
+                    model_name=model,
+                    device="cuda", 
+                    fp16=torch_fp16,
+                    batch_size=torch_batch_size,
+                )
+            except Exception as e:
+                console.print(
+                    f"[yellow][upscaler] Torch backend failed ({e}). "
+                    f"Falling back to Vulkan/NCNN backend.[/yellow]"
+                )
+                backend = "realesrgan"
         else:
-            console.log(f"[bold yellow] Launching VULKAN-backend (Fallback, single-frame) [/bold yellow]")
-            for frame in all_frames_in:
-                out_frame = frames_out / frame.name
+            console.log(f"[bold yellow] Launching VULKAN-backend (NCNN/Vulkan) [/bold yellow]")
+            # Fast path: Real-ESRGAN NCNN can process a whole folder of frames in one process.
+            # This is dramatically faster than spawning one process per frame.
+            try:
                 run_realesrgan(
-                    input_path=frame,
-                    output_path=out_frame,
+                    input_path=frames_in,
+                    output_path=frames_out,
                     scale=scale,
                     model_name=model,
                     auto_download=auto_download,
                 )
+            except Exception as e:
+                console.print(
+                    f"[yellow][upscaler] Folder-mode Vulkan failed ({e}). "
+                    f"Falling back to per-frame mode.[/yellow]"
+                )
+                for frame in all_frames_in:
+                    out_frame = frames_out / frame.name
+                    run_realesrgan(
+                        input_path=frame,
+                        output_path=out_frame,
+                        scale=scale,
+                        model_name=model,
+                        auto_download=auto_download,
+                    )
 
         pattern_out = frames_out / "frame_%06d.png"
         cmd_assemble = [

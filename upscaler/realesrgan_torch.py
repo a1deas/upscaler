@@ -53,9 +53,6 @@ def load_realesrgan_model(model_name: str, scale: int, device: str) -> RRDBNet:
     elif "params" in loadnet:
         loadnet = loadnet["params"]
 
-    model.load_state_dict(loadnet, strict=True)
-    model.eval()
-
     if len(loadnet) > 0:
         first_key = next(iter(loadnet.keys()))
         if first_key.startswith("module."):
@@ -121,8 +118,42 @@ def run_realesrgan_torch(
             f"({len(batch_in)} frames) on {device}[/blue]"
         )
 
-        with torch.no_grad():
-            output_tensor = model(input_tensor)
+        try:
+            with torch.inference_mode():
+                output_tensor = model(input_tensor)
+        except RuntimeError as e:
+            msg = str(e).lower()
+            # Common on very new NVIDIA GPUs with older Torch wheels.
+            if device == "cuda" and (
+                "no kernel image" in msg
+                or "not compatible" in msg
+                or "sm_120" in msg
+                or "sm120" in msg
+            ):
+                raise RuntimeError(
+                    "PyTorch CUDA backend failed on this GPU (likely missing sm_120 support). "
+                    "Use the Vulkan/NCNN backend (`--backend realesrgan`) or install a PyTorch build "
+                    "that supports your GPU (CUDA 12.8+ / newer PyTorch). "
+                    f"Original error: {e}"
+                ) from e
+
+            # If we OOM on a multi-frame batch, retry frame-by-frame (same model, lower peak VRAM).
+            if device == "cuda" and "out of memory" in msg and len(tensor_list) > 1:
+                console.print(
+                    "[yellow][upscaler] CUDA OOM on batch; retrying frame-by-frame to reduce VRAM.[/yellow]"
+                )
+                try:
+                    torch.cuda.empty_cache()
+                except Exception:
+                    pass
+
+                outs = []
+                with torch.inference_mode():
+                    for single in tensor_list:
+                        outs.append(model(single))
+                output_tensor = torch.cat(outs, dim=0)
+            else:
+                raise
 
         output_tensor = output_tensor.mul_(0.5).add_(0.5).clamp_(0.0, 1.0)
 
