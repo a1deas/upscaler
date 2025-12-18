@@ -11,6 +11,41 @@ from .realesrgan_vulkan import run_realesrgan
 console = Console()
 Backend = Literal["bicubic", "realesrgan", "torch"]
 
+def _probe_fps(input_path: Path) -> float:
+    """
+    Best-effort FPS probe (used to re-assemble frames back to video at correct speed).
+    Falls back to 30.0 if probing fails.
+    """
+    try:
+        cmd = [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=r_frame_rate",
+            "-of",
+            "default=nokey=1:noprint_wrappers=1",
+            str(input_path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            return 30.0
+        rate = (proc.stdout or "").strip()
+        if not rate:
+            return 30.0
+        if "/" in rate:
+            num_s, den_s = rate.split("/", 1)
+            num = float(num_s)
+            den = float(den_s)
+            if den > 0:
+                return num / den
+            return 30.0
+        return float(rate)
+    except Exception:
+        return 30.0
+
 def upscale_image(
         input_path: Path | str,
         output_path: Path | str, 
@@ -18,6 +53,9 @@ def upscale_image(
         backend: Backend = "realesrgan",
         model: str = "realesrgan-x4plus",
         auto_download: bool = False,
+        gpu_id: int | None = None,
+        verbose: bool = False,
+        force_gpu: bool = False,
 ) -> Path:
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -32,7 +70,10 @@ def upscale_image(
             output_path, 
             scale, 
             model_name = model, 
-            auto_download = auto_download
+            auto_download = auto_download,
+            gpu_id = gpu_id,
+            verbose = verbose,
+            force_gpu = force_gpu,
         )
     elif backend == "torch":
         # Lazy import: keep vulkan backend usable without torch installed.
@@ -64,6 +105,9 @@ def upscale_video(
         auto_download: bool = False,
         torch_batch_size: int = 4, 
         torch_fp16: bool = True,
+        gpu_id: int | None = None,
+        verbose: bool = False,
+        force_gpu: bool = False,
 ) -> Path: 
     input_path = Path(input_path)
     output_path = Path(output_path)
@@ -126,6 +170,9 @@ def upscale_video(
                     scale=scale,
                     model_name=model,
                     auto_download=auto_download,
+                    gpu_id=gpu_id,
+                    verbose=verbose,
+                    force_gpu=force_gpu,
                 )
             except Exception as e:
                 console.print(
@@ -140,14 +187,23 @@ def upscale_video(
                         scale=scale,
                         model_name=model,
                         auto_download=auto_download,
+                        gpu_id=gpu_id,
+                        verbose=verbose,
+                        force_gpu=force_gpu,
                     )
 
         pattern_out = frames_out / "frame_%06d.png"
+        out_fps = float(fps) if fps is not None else _probe_fps(input_path)
         cmd_assemble = [
             "ffmpeg", "-y", 
-            "-framerate", str(fps or 30), 
-            "-i", str(pattern_out), 
+            "-framerate", str(out_fps),
+            "-i", str(pattern_out),
+            "-i", str(input_path),
+            "-map", "0:v:0",
+            "-map", "1:a:0?",
             "-c:v", "libx264", "-pix_fmt", "yuv420p", 
+            "-c:a", "aac",
+            "-shortest",
             str(output_path),
         ]
         console.log("[cyan] Assemling video... [/cyan]")

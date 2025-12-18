@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Optional
+import os
 import sys
 import shutil
 import tempfile
@@ -37,7 +38,7 @@ BINARY_URLS = {
     ),
 }
 
-BINARY_URL = BINARY_URLS[PLATFORM]
+BINARY_URL = os.environ.get("CUTSMITH_REALESRGAN_NCNN_URL") or BINARY_URLS[PLATFORM]
 
 
 def ensure_dirs() -> None:
@@ -75,7 +76,11 @@ def _download_and_unpack_ncnn(url: str) -> None:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
         shutil.copy2(bin_src, DEFAULT_REALESRGAN_BIN)
-        DEFAULT_REALESRGAN_BIN.chmod(0o755)
+        # On Windows chmod is mostly a no-op and can fail depending on ACLs.
+        try:
+            DEFAULT_REALESRGAN_BIN.chmod(0o755)
+        except Exception:
+            pass
 
         for mf in model_files:
             dst = MODELS_DIR / mf.name

@@ -53,6 +53,22 @@ def run(
 		"--auto-download",
 		help = "Try to download binary/models if missing",
 	),
+	gpu_id: Optional[int] = typer.Option(
+		None,
+		"--gpu-id",
+		help = "RealESRGAN NCNN/Vulkan GPU id. 0/1/2... selects a Vulkan device; -1 forces CPU; default=auto.",
+	),
+	verbose: bool = typer.Option(
+		False,
+		"--verbose",
+		"-v",
+		help = "Verbose output from the RealESRGAN binary (shows the Vulkan device).",
+	),
+	force_gpu: bool = typer.Option(
+		False,
+		"--force-gpu/--no-force-gpu",
+		help = "Fail if Vulkan resolves to a software device (llvmpipe/SwiftShader).",
+	),
 	torch_batch_size: int = typer.Option(
 		4,
 		"--batch",
@@ -83,6 +99,9 @@ def run(
 			backend = backend, # type: ignore
 			model = model,
 			auto_download = auto_download,
+			gpu_id = gpu_id,
+			verbose = verbose,
+			force_gpu = force_gpu,
 		)
 	elif mode == "video": 
 		upscale_video(
@@ -94,6 +113,9 @@ def run(
 			auto_download=auto_download,
 			torch_batch_size=torch_batch_size,
 			torch_fp16=torch_fp16,
+			gpu_id=gpu_id,
+			verbose=verbose,
+			force_gpu=force_gpu,
 		)
 	else:
 		raise typer.BadParameter(f"Unknown mode: {mode}. Must be 'image' or 'video'.")
